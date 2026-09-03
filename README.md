@@ -28,14 +28,17 @@ fusionsight/
 ```powershell
 py -3.12 -m venv .venv
 .\.venv\Scripts\Activate.ps1
-pip install torch==2.13.0 torchvision==0.28.0 --index-url https://download.pytorch.org/whl/cu126
 pip install -r requirements.txt
 yolo settings datasets_dir="G:\fusionsight\datasets"
 python scripts\check_gpu.py          # must print CUDA available: True
 ```
 
-Torch must be installed **before** ultralytics, or pip resolves the CPU-only
-wheel from PyPI and the GPU sits idle.
+`requirements.txt` carries a `--extra-index-url` for PyTorch's CUDA 12.6 wheel
+index, so this single install resolves the pinned `torch==2.13.0+cu126` /
+`torchvision==0.28.0+cu126` GPU builds directly -- no separate pre-install step
+needed. (If `check_gpu.py` ever reports `CUDA available: False`, something
+resolved a CPU wheel instead -- reinstall with
+`pip install --force-reinstall torch==2.13.0+cu126 torchvision==0.28.0+cu126 --extra-index-url https://download.pytorch.org/whl/cu126`.)
 
 ## Dataset
 

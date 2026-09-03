@@ -1,3 +1,8 @@
+# Lets pip resolve the pinned torch==...+cu126 / torchvision==...+cu126 builds
+# below in this single `pip install -r requirements.txt` -- those local-version
+# wheels only exist on PyTorch's own index, not plain PyPI.
+--extra-index-url https://download.pytorch.org/whl/cu126
+
 # albumentations enables the `fpv` augmentation profile (scripts/fpv_augment.py).
 # If it is missing, ultralytics SILENTLY skips the entire augmentation stage --
 # every checkpoint before 2026-09-02 was trained with no blur/noise/compression.
