@@ -1,0 +1,52 @@
+# --- Python ---
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+*.egg-info/
+build/
+dist/
+
+# --- Virtual environment ---
+.venv/
+venv/
+env/
+
+# --- Training data (large, fetched/generated separately) ---
+datasets/
+
+# --- Model weights / exported artifacts (large binaries) ---
+weights/
+*.pt
+*.pth
+*.onnx
+*.engine
+*.torchscript
+
+# --- Generated runs / logs / benchmark output ---
+runs/
+logs/
+*.log
+
+# --- Video / media (large, generated or captured footage) ---
+*.mp4
+*.avi
+*.mov
+*.mkv
+
+# --- Plain-text scratch/report files (keep requirements.txt only) ---
+*.txt
+!requirements.txt
+
+# --- Claude Code related ---
+.claude/
+CLAUDE.md
+.claude.json
+.mcp.json
+
+# --- OS / editor cruft ---
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
