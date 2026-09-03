@@ -17,12 +17,16 @@ env/
 datasets/
 
 # --- Model weights / exported artifacts (large binaries) ---
-weights/
+weights/*
 *.pt
 *.pth
 *.onnx
 *.engine
 *.torchscript
+
+# Keep the two deployed checkpoints so a fresh clone can actually run the model
+!weights/best.pt
+!weights/drone_best.pt
 
 # --- Generated runs / logs / benchmark output ---
 runs/
