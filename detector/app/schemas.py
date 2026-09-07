@@ -17,6 +17,18 @@ class Detection(BaseModel):
     y2: float
     track_id: Optional[int] = Field(None, description="Stable across frames when tracking")
     moving: Optional[bool] = Field(None, description="True if centroid displaced beyond threshold")
+    # Fusion fields (see fusion/engine.py) -- absent/false unless FUSION_ENABLED
+    # and this feed has a pose. A ghost is an object this feed's own model
+    # missed but another feed detected nearby (geolocation match); source_feed
+    # is that other feed's source_id.
+    is_ghost: bool = Field(False, description="True if backfilled from another feed rather than detected locally")
+    source_feed: Optional[str] = Field(None, description="Originating source_id, set only when is_ghost")
+    world_lat: Optional[float] = None
+    world_lon: Optional[float] = None
+    bearing_deg: Optional[float] = Field(
+        None, description="Compass bearing from this feed to the object; ghosts use this for an off-screen edge indicator when not in_frame"
+    )
+    in_frame: Optional[bool] = Field(None, description="Ghosts only: whether the projected position falls inside this feed's current view")
 
 
 class DetectionResponse(BaseModel):
@@ -25,6 +37,18 @@ class DetectionResponse(BaseModel):
     frame_height: int
     inference_ms: float
     detections: List[Detection]
+
+
+class PoseUpdate(BaseModel):
+    """One GPS/IMU sample from a feed's phone, sent over WS /ws/pose/{source_id}
+    (app/routers/pose.py), independent of the video/detection WS."""
+    lat: float
+    lon: float
+    alt: float = 0.0
+    heading_deg: float = Field(0.0, description="Compass heading, 0=north, clockwise")
+    tilt_deg: float = Field(0.0, description="Camera pitch below horizontal; positive = looking down")
+    accuracy_m: Optional[float] = Field(None, description="Reported GPS accuracy, widens the fusion match radius")
+    fov_deg: Optional[float] = Field(None, description="Camera horizontal FOV if known; falls back to FUSION_DEFAULT_FOV_DEG")
 
 
 class TrainRequest(BaseModel):

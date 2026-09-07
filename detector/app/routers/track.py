@@ -6,6 +6,10 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from starlette.concurrency import run_in_threadpool
 
 from app.detector import detector
+from fusion import config as fusion_config
+from fusion import engine as fusion_engine
+from fusion.frame_relay import frame_relay
+from fusion.pose_store import pose_store
 
 router = APIRouter(tags=["streaming"])
 
@@ -48,7 +52,20 @@ async def ws_track(websocket: WebSocket, source_id: str, view: str = "ground"):
             # Blocking inference belongs off the event loop: otherwise this feed
             # blocks every other feed and every HTTP request for its duration.
             result = await run_in_threadpool(detector.track, frame, source_id, view)
+
+            # Fusion runs synchronously in the same per-frame path (not a
+            # separate async budget) -- see multi_feed_fusion_spec.md's
+            # latency decision. No-op if fusion is off or this feed has no
+            # pose yet (own detections pass through unchanged).
+            if fusion_config.FUSION_ENABLED:
+                pose = pose_store.latest(source_id)
+                if pose is not None:
+                    result["detections"] = fusion_engine.process(
+                        source_id, pose, result["detections"]
+                    )
+
             await websocket.send_text(json.dumps(result))
+            frame_relay.publish(source_id, raw)
 
     except WebSocketDisconnect:
         print(f"[ws] feed disconnected: {source_id}")
@@ -62,3 +79,4 @@ async def ws_track(websocket: WebSocket, source_id: str, view: str = "ground"):
     finally:
         # Runs on every exit path, so a crashed feed frees its state too.
         detector.reset_source(source_id)
+        fusion_engine.reset_source(source_id)

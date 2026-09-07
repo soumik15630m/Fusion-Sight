@@ -22,12 +22,17 @@ transport, not a replacement, so existing clients need no changes.
 import asyncio
 import json
 
+import cv2
 from aiortc import RTCPeerConnection, RTCSessionDescription
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from starlette.concurrency import run_in_threadpool
 
 from app.detector import detector
+from fusion import config as fusion_config
+from fusion import engine as fusion_engine
+from fusion.frame_relay import frame_relay
+from fusion.pose_store import pose_store
 
 router = APIRouter(prefix="/webrtc", tags=["streaming"])
 
@@ -77,6 +82,7 @@ async def offer(source_id: str, body: SessionDescription):
     async def on_connectionstatechange():
         if pc.connectionState in ("failed", "closed", "disconnected"):
             detector.reset_source(source_id)
+            fusion_engine.reset_source(source_id)
             _peer_connections.discard(pc)
             await pc.close()
 
@@ -95,7 +101,18 @@ async def offer(source_id: str, body: SessionDescription):
                     # Same blocking call, same lock, same four-stage cascade
                     # as the WebSocket path -- only the transport differs.
                     result = await run_in_threadpool(detector.track, img, source_id)
+
+                    if fusion_config.FUSION_ENABLED:
+                        pose = pose_store.latest(source_id)
+                        if pose is not None:
+                            result["detections"] = fusion_engine.process(
+                                source_id, pose, result["detections"]
+                            )
+
                     _send(state["channel"], result)
+                    ok, jpeg = cv2.imencode(".jpg", img)
+                    if ok:
+                        frame_relay.publish(source_id, jpeg.tobytes())
             except Exception as e:  # noqa: BLE001
                 # Raised by aiortc as the normal way this loop ends when the
                 # client stops sending (track ended) -- not worth more than a
