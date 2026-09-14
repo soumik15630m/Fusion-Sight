@@ -3,12 +3,15 @@
 import dynamic from "next/dynamic";
 import VideoTile from "@/components/VideoTile";
 import { useFusionFeeds } from "@/lib/useFusionFeeds";
+import { useWorldObjects } from "@/lib/useWorldObjects";
 
 const MapPanel = dynamic(() => import("@/components/MapPanel"), { ssr: false });
 
 export default function OperatorPage() {
   const feeds = useFusionFeeds();
+  const worldObjects = useWorldObjects();
   const sourceIds = Object.keys(feeds);
+  const confirmedCount = worldObjects.filter((o) => o.confirmations >= 2).length;
 
   return (
     <main style={{ padding: 16 }}>
@@ -27,13 +30,19 @@ export default function OperatorPage() {
         }}
       >
         {sourceIds.map((id) => (
-          <VideoTile key={id} sourceId={id} />
+          <VideoTile key={id} sourceId={id} headingDeg={feeds[id]?.heading_deg ?? 0} />
         ))}
         {sourceIds.length === 0 && <p style={{ color: "#666" }}>Waiting for feeds...</p>}
       </div>
 
-      <h2 style={{ fontSize: 14, color: "#aaa", marginTop: 24 }}>All feed positions</h2>
-      <MapPanel feeds={feeds} height={360} />
+      <h2 style={{ fontSize: 14, color: "#aaa", marginTop: 24 }}>Unified world map</h2>
+      <p style={{ color: "#888", fontSize: 13, marginTop: 0 }}>
+        {worldObjects.length} object(s) detected across all feeds · {confirmedCount} cross-confirmed.{" "}
+        <span style={{ color: "#00e676" }}>● confirmed (2+ feeds)</span>{" "}
+        <span style={{ color: "#ffb300" }}>● single-feed</span>{" "}
+        <span style={{ color: "#ff5252" }}>● camera</span>
+      </p>
+      <MapPanel feeds={feeds} objects={worldObjects} height={360} />
     </main>
   );
 }

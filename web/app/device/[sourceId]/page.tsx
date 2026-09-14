@@ -19,8 +19,15 @@ export default function DevicePage({ params }: { params: Promise<{ sourceId: str
   const { videoRef, status, error, detection, pose, start, stop } = useDeviceFeed(sourceId, view);
   const feeds = useFusionFeeds();
 
-  const detections = detection?.detections ?? [];
-  const ghostCount = detections.filter((d) => d.is_ghost).length;
+  // This screen stands in for the wearer's AR glasses: it shows ONLY the
+  // ghost markers backfilled from other feeds (the augmentation), not this
+  // feed's own detection boxes. The device is a capture source -- camera +
+  // GPS -- and its own detections exist only to feed other feeds' fusion, so
+  // drawing them here would be wasted. The operator page is where every
+  // feed's own boxes are reviewed.
+  const allDetections = detection?.detections ?? [];
+  const ghosts = allDetections.filter((d) => d.is_ghost);
+  const ownCount = allDetections.length - ghosts.length;
 
   return (
     <main style={{ padding: 16, maxWidth: 520, margin: "0 auto" }}>
@@ -44,7 +51,7 @@ export default function DevicePage({ params }: { params: Promise<{ sourceId: str
           style={{ width: "100%", height: "100%", objectFit: "cover" }}
         />
         <DetectionOverlay
-          detections={detections}
+          detections={ghosts}
           width={DISPLAY_WIDTH}
           height={DISPLAY_HEIGHT}
           ownHeadingDeg={pose?.heading_deg ?? 0}
@@ -74,7 +81,8 @@ export default function DevicePage({ params }: { params: Promise<{ sourceId: str
       {error && <p style={{ color: "#ff5252", textAlign: "center" }}>{error}</p>}
 
       <p style={{ textAlign: "center", color: "#888", fontSize: 13 }}>
-        {detections.length - ghostCount} own detection(s), {ghostCount} ghost(s) backfilled from other feeds
+        {ghosts.length} ghost(s) backfilled from other feeds
+        <span style={{ color: "#555" }}> · {ownCount} own detection(s) sent to fusion (not shown here)</span>
         {detection && ` · ${detection.inference_ms.toFixed(0)}ms`}
       </p>
 

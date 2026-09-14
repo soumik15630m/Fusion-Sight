@@ -10,6 +10,8 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from pydantic import ValidationError
 
 from app.schemas import PoseUpdate
+from fusion import engine as fusion_engine
+from fusion.detection_relay import detection_relay
 from fusion.frame_relay import frame_relay
 from fusion.pose_store import Pose, pose_store
 
@@ -77,6 +79,37 @@ async def ws_view(websocket: WebSocket, source_id: str):
         print(f"[view] viewer {source_id} failed: {e!r}")
     finally:
         frame_relay.unsubscribe(source_id, queue)
+
+
+@router.websocket("/ws/detections/{source_id}")
+async def ws_detections(websocket: WebSocket, source_id: str):
+    """Operator page: the merged detections (own + cross-feed ghosts) for a
+    feed, as JSON, on the same cadence its frames arrive on /ws/view. The
+    operator video wall overlays these on the relayed video. Read-only, same
+    bounded-queue drop-oldest contract as /ws/view -- a slow viewer never
+    affects the feed."""
+    await websocket.accept()
+    queue = detection_relay.subscribe(source_id)
+    print(f"[detections] viewer connected: {source_id}")
+    try:
+        while True:
+            payload = await queue.get()
+            await websocket.send_json(payload)
+    except WebSocketDisconnect:
+        print(f"[detections] viewer disconnected: {source_id}")
+    except Exception as e:  # noqa: BLE001
+        print(f"[detections] viewer {source_id} failed: {e!r}")
+    finally:
+        detection_relay.unsubscribe(source_id, queue)
+
+
+@router.get("/fusion/detections", tags=["fusion"])
+async def fusion_detections():
+    """Unified world map for the operator overview: every real-world object
+    detected across all feeds, deduplicated (an object several feeds see is
+    one entry), each with how many feeds confirmed it so the client can
+    color-code single-feed sightings differently from cross-confirmed ones."""
+    return {"objects": fusion_engine.world_objects()}
 
 
 @router.get("/fusion/feeds", tags=["fusion"])

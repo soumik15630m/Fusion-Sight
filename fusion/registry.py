@@ -40,6 +40,14 @@ class DetectionRegistry:
             self._prune_locked(now)
             return [e for e in self._entries if e.source_id != exclude_source_id]
 
+    def snapshot_within_window(self) -> list[RegistryEntry]:
+        """All feeds' recent geolocated detections, for the operator's unified
+        world map (fusion/engine.py world_objects)."""
+        now = time.time() * 1000
+        with self._lock:
+            self._prune_locked(now)
+            return list(self._entries)
+
     def reset_source(self, source_id: str) -> None:
         with self._lock:
             self._entries = [e for e in self._entries if e.source_id != source_id]

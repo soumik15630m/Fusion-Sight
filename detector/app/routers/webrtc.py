@@ -31,6 +31,7 @@ from starlette.concurrency import run_in_threadpool
 from app.detector import detector
 from fusion import config as fusion_config
 from fusion import engine as fusion_engine
+from fusion.detection_relay import detection_relay
 from fusion.frame_relay import frame_relay
 from fusion.pose_store import pose_store
 
@@ -113,6 +114,9 @@ async def offer(source_id: str, body: SessionDescription):
                     ok, jpeg = cv2.imencode(".jpg", img)
                     if ok:
                         frame_relay.publish(source_id, jpeg.tobytes())
+                    # Merged detections to operator viewers, matching the
+                    # WebSocket path (app/routers/track.py).
+                    detection_relay.publish(source_id, result)
             except Exception as e:  # noqa: BLE001
                 # Raised by aiortc as the normal way this loop ends when the
                 # client stops sending (track ended) -- not worth more than a

@@ -8,6 +8,7 @@ from starlette.concurrency import run_in_threadpool
 from app.detector import detector
 from fusion import config as fusion_config
 from fusion import engine as fusion_engine
+from fusion.detection_relay import detection_relay
 from fusion.frame_relay import frame_relay
 from fusion.pose_store import pose_store
 
@@ -65,7 +66,12 @@ async def ws_track(websocket: WebSocket, source_id: str, view: str = "ground"):
                     )
 
             await websocket.send_text(json.dumps(result))
+            # Fan the frame out to operator viewers, and the merged detections
+            # alongside it so the operator video wall can overlay boxes on the
+            # same frame -- the capture device draws only ghosts from its own
+            # response, the merge lives on the operator side.
             frame_relay.publish(source_id, raw)
+            detection_relay.publish(source_id, result)
 
     except WebSocketDisconnect:
         print(f"[ws] feed disconnected: {source_id}")

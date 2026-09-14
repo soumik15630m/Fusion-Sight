@@ -104,5 +104,58 @@ def process(source_id: str, pose: Pose, detections: list[dict]) -> list[dict]:
     return result
 
 
+def world_objects() -> list[dict]:
+    """Collapse every feed's recent geolocated detections into deduplicated
+    real-world objects for the operator's unified map. An object seen by 3
+    feeds is one marker, not three, and carries how many distinct feeds
+    confirmed it (the operator color-codes single-feed vs cross-confirmed).
+
+    Greedy proximity clustering -- linear over the current window's entries,
+    which is fine at this project's feed/detection scale (see registry.py's
+    module note); it is not a spatial index.
+    """
+    entries = registry.snapshot_within_window()
+    clusters: list[dict] = []
+
+    for e in entries:
+        target = None
+        for c in clusters:
+            if geo.haversine_m(e.lat, e.lon, c["lat"], c["lon"]) <= (e.radius_m + c["radius_m"]):
+                target = c
+                break
+        if target is None:
+            clusters.append({
+                "lat": e.lat,
+                "lon": e.lon,
+                "radius_m": e.radius_m,
+                "sources": {e.source_id},
+                "class_names": [e.detection.get("class_name", "unknown")],
+                "count": 1,
+            })
+        else:
+            # Running mean keeps the marker centred on all its members rather
+            # than pinned to whichever detection happened to land first.
+            n = target["count"]
+            target["lat"] = (target["lat"] * n + e.lat) / (n + 1)
+            target["lon"] = (target["lon"] * n + e.lon) / (n + 1)
+            target["radius_m"] = max(target["radius_m"], e.radius_m)
+            target["sources"].add(e.source_id)
+            target["class_names"].append(e.detection.get("class_name", "unknown"))
+            target["count"] = n + 1
+
+    objects = []
+    for c in clusters:
+        # Most-reported class label wins as the cluster's name.
+        class_name = max(set(c["class_names"]), key=c["class_names"].count)
+        objects.append({
+            "lat": c["lat"],
+            "lon": c["lon"],
+            "class_name": class_name,
+            "confirmations": len(c["sources"]),
+            "sources": sorted(c["sources"]),
+        })
+    return objects
+
+
 def reset_source(source_id: str) -> None:
     registry.reset_source(source_id)

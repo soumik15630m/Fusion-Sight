@@ -1,7 +1,7 @@
 "use client";
 
 import { CircleMarker, MapContainer, Popup, TileLayer } from "react-leaflet";
-import type { FusionFeeds } from "@/lib/types";
+import type { FusionFeeds, WorldObject } from "@/lib/types";
 import "leaflet/dist/leaflet.css";
 
 // CircleMarker instead of the default Marker: the default Leaflet marker
@@ -13,9 +13,18 @@ interface Props {
   feeds: FusionFeeds;
   selfId?: string;
   height?: number;
+  /** Operator unified map only: deduplicated real-world objects across all
+   * feeds. Color-coded by confirmations -- cross-confirmed (2+ feeds) vs a
+   * single-feed sighting. */
+  objects?: WorldObject[];
 }
 
-export default function MapPanel({ feeds, selfId, height = 240 }: Props) {
+// Confirmed = seen by 2+ feeds (the fused/merged picture); unconfirmed = a
+// lone sighting one feed reported and no other feed corroborated.
+const CONFIRMED_COLOR = "#00e676";
+const UNCONFIRMED_COLOR = "#ffb300";
+
+export default function MapPanel({ feeds, selfId, height = 240, objects = [] }: Props) {
   const entries = Object.entries(feeds);
   const center: [number, number] = entries.length
     ? [entries[0][1].lat, entries[0][1].lon]
@@ -64,6 +73,28 @@ export default function MapPanel({ feeds, selfId, height = 240 }: Props) {
           </Popup>
         </CircleMarker>
       ))}
+      {objects.map((obj, i) => {
+        const confirmed = obj.confirmations >= 2;
+        const color = confirmed ? CONFIRMED_COLOR : UNCONFIRMED_COLOR;
+        return (
+          <CircleMarker
+            key={`obj-${i}`}
+            center={[obj.lat, obj.lon]}
+            radius={6}
+            pathOptions={{ color, fillColor: color, fillOpacity: 0.6, weight: confirmed ? 3 : 1 }}
+          >
+            <Popup>
+              <strong>{obj.class_name}</strong>
+              <br />
+              {confirmed
+                ? `confirmed by ${obj.confirmations} feeds`
+                : "single-feed sighting (unconfirmed)"}
+              <br />
+              {obj.sources.join(", ")}
+            </Popup>
+          </CircleMarker>
+        );
+      })}
     </MapContainer>
   );
 }

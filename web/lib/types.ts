@@ -50,3 +50,14 @@ export interface FusionFeed {
 }
 
 export type FusionFeeds = Record<string, FusionFeed>;
+
+/** One deduplicated real-world object on the operator's unified map --
+ * GET /fusion/detections (detector/app/routers/pose.py). `confirmations` is
+ * how many distinct feeds saw it: 1 = single-feed sighting, 2+ = cross-confirmed. */
+export interface WorldObject {
+  lat: number;
+  lon: number;
+  class_name: string;
+  confirmations: number;
+  sources: string[];
+}
