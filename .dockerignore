@@ -1,0 +1,21 @@
+# Root build context = detector image (context is the repo root so it can copy
+# both detector/ and fusion/). Keep the context small and never ship build junk.
+.git
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+**/.mypy_cache
+
+# Detector-side heavy/irrelevant dirs (weights/ is intentionally NOT ignored --
+# the model must ship in the image).
+detector/.venv
+detector/runs
+detector/yolov3
+detector/tests
+
+# Web tree isn't part of the detector image.
+web/node_modules
+web/.next
+
+# Local tooling
+.claude

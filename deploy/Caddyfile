@@ -1,0 +1,20 @@
+# Single-origin reverse proxy in front of the stack. Cloudflare's tunnel points
+# here; this splits traffic so phones only ever see ONE HTTPS origin:
+#   - backend API + WebSocket paths  -> detector:8000
+#   - everything else (pages, assets) -> web:3000
+# Caddy upgrades WebSockets transparently, so /ws/track, /ws/pose, /ws/view and
+# /ws/detections all work through it.
+:80 {
+	# Match every backend path prefix (detector/app/routers/*). Keep this in sync
+	# if new backend routes are added.
+	@api {
+		path /ws/* /webrtc/* /fusion/* /detect /detect/* /exclude /exclude/* /train /train/* /health /docs /docs/* /openapi.json /redoc
+	}
+	handle @api {
+		reverse_proxy detector:8000
+	}
+
+	handle {
+		reverse_proxy web:3000
+	}
+}

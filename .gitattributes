@@ -1,0 +1,8 @@
+# Container-bound files must stay LF regardless of host OS -- they're copied into
+# Linux images and parsed there.
+*.Dockerfile   text eol=lf
+Dockerfile     text eol=lf
+docker-compose.yml text eol=lf
+Caddyfile      text eol=lf
+*.sh           text eol=lf
+.dockerignore  text eol=lf

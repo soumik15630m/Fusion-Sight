@@ -1,0 +1,60 @@
+# FusionSight full stack: `docker compose up --build`
+#
+#   detector  - FastAPI + YOLO + fusion, runs on the GPU
+#   web       - Next.js operator/device client
+#   proxy     - Caddy, single origin in front of detector + web
+#   cloudflared - Cloudflare tunnel exposing the proxy over HTTPS (for phone
+#                 camera/GPS, which browsers only allow on a secure origin)
+#
+# The public HTTPS URL is printed in the cloudflared logs on startup:
+#   docker compose logs -f cloudflared   ->   https://<random>.trycloudflare.com
+
+services:
+  detector:
+    build:
+      context: .                     # repo root: image needs both detector/ and fusion/
+      dockerfile: detector/Dockerfile
+    environment:
+      BATTLESIGHT_DEVICE: "0"        # first GPU; set "cpu" to run without one
+      FUSION_ENABLED: "1"
+    expose:
+      - "8000"                       # internal only; reached via the proxy
+    restart: unless-stopped
+    # GPU passthrough. Requires the NVIDIA Container Toolkit on the host
+    # (nvidia-ctk) and, on Windows, Docker Desktop with WSL2 + NVIDIA driver.
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  web:
+    build:
+      context: ./web
+      args:
+        NEXT_PUBLIC_BACKEND_SAME_ORIGIN: "1"   # talk to the backend on the proxy origin
+    expose:
+      - "3000"
+    restart: unless-stopped
+
+  proxy:
+    image: caddy:2-alpine
+    depends_on:
+      - detector
+      - web
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+    ports:
+      - "8080:80"                    # optional LAN access: http://<laptop-ip>:8080 (operator page)
+    restart: unless-stopped
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    depends_on:
+      - proxy
+    # Quick tunnel: no Cloudflare account needed, random *.trycloudflare.com URL.
+    # For a stable named-tunnel hostname instead, see DEPLOY.md.
+    command: tunnel --no-autoupdate --url http://proxy:80
+    restart: unless-stopped
