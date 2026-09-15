@@ -46,6 +46,7 @@ export interface FusionFeed {
   alt: number;
   heading_deg: number;
   accuracy_m: number | null;
+  name: string | null;
   ts_ms: number;
 }
 

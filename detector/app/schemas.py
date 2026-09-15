@@ -44,6 +44,7 @@ class PoseUpdate(BaseModel):
     (app/routers/pose.py), independent of the video/detection WS."""
     lat: float
     lon: float
+    name: Optional[str] = Field(None, description="Human-readable feed label (the wearer's name), shown on the operator page instead of the raw source_id")
     alt: float = 0.0
     heading_deg: float = Field(0.0, description="Compass heading, 0=north, clockwise")
     tilt_deg: float = Field(0.0, description="Camera pitch below horizontal; positive = looking down")

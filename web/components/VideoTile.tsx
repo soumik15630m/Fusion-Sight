@@ -3,10 +3,13 @@
 import { useEffect, useRef, useState } from "react";
 import DetectionOverlay from "@/components/DetectionOverlay";
 import { wsBase } from "@/lib/config";
+import { useStableDetections } from "@/lib/useStableDetections";
 import { useViewDetections } from "@/lib/useViewDetections";
 
 interface Props {
   sourceId: string;
+  /** Human-readable feed label from /fusion/feeds; falls back to sourceId. */
+  name?: string | null;
   /** This feed's current compass heading, so off-screen ghost arrows point
    * correctly. From the operator page's /fusion/feeds poll. */
   headingDeg?: number;
@@ -23,13 +26,14 @@ const OVERLAY_HEIGHT = 240;
  * -- so the operator sees every feed's own boxes AND the cross-feed ghosts,
  * the fusion the capture device never draws for itself. No second
  * capture/encode on the phone. */
-export default function VideoTile({ sourceId, headingDeg = 0 }: Props) {
+export default function VideoTile({ sourceId, name, headingDeg = 0 }: Props) {
   const imgRef = useRef<HTMLImageElement>(null);
   const [connected, setConnected] = useState(false);
   const lastUrlRef = useRef<string | null>(null);
   const detection = useViewDetections(sourceId);
-  const detections = detection?.detections ?? [];
+  const detections = useStableDetections(detection?.detections ?? []);
   const ghostCount = detections.filter((d) => d.is_ghost).length;
+  const label = name || sourceId;
 
   useEffect(() => {
     const ws = new WebSocket(`${wsBase()}/ws/view/${encodeURIComponent(sourceId)}`);
@@ -68,7 +72,7 @@ export default function VideoTile({ sourceId, headingDeg = 0 }: Props) {
           padding: "2px 6px",
         }}
       >
-        {sourceId} {connected ? "" : "(no signal)"}
+        {label} {connected ? "" : "(no signal)"}
       </div>
       {ghostCount > 0 && (
         <div

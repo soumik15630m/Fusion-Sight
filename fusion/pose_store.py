@@ -22,6 +22,7 @@ class Pose:
     tilt_deg: float = 0.0        # camera pitch below horizontal; positive = looking down
     accuracy_m: Optional[float] = None
     fov_deg: Optional[float] = None
+    name: Optional[str] = None   # human-readable feed label for the operator page
     ts_ms: float = 0.0           # server receipt time, set by PoseStore.update
 
 

@@ -46,6 +46,7 @@ async def ws_pose(websocket: WebSocket, source_id: str):
                     tilt_deg=update.tilt_deg,
                     accuracy_m=update.accuracy_m,
                     fov_deg=update.fov_deg,
+                    name=update.name,
                 ),
             )
     except WebSocketDisconnect:
@@ -124,6 +125,7 @@ async def fusion_feeds():
             "alt": pose.alt,
             "heading_deg": pose.heading_deg,
             "accuracy_m": pose.accuracy_m,
+            "name": pose.name,
             "ts_ms": pose.ts_ms,
         }
         for source_id, pose in active.items()

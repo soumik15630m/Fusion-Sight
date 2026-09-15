@@ -66,7 +66,13 @@ export default function MapPanel({ feeds, selfId, height = 240, objects = [] }: 
           }}
         >
           <Popup>
-            <strong>{sourceId}</strong>
+            <strong>{feed.name || sourceId}</strong>
+            {feed.name && feed.name !== sourceId && (
+              <>
+                <br />
+                <span style={{ color: "#888" }}>{sourceId}</span>
+              </>
+            )}
             <br />
             heading {feed.heading_deg.toFixed(0)}°
             {feed.accuracy_m != null && <> · ±{feed.accuracy_m.toFixed(1)}m</>}

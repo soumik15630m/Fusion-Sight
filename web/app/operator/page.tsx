@@ -30,7 +30,12 @@ export default function OperatorPage() {
         }}
       >
         {sourceIds.map((id) => (
-          <VideoTile key={id} sourceId={id} headingDeg={feeds[id]?.heading_deg ?? 0} />
+          <VideoTile
+            key={id}
+            sourceId={id}
+            name={feeds[id]?.name}
+            headingDeg={feeds[id]?.heading_deg ?? 0}
+          />
         ))}
         {sourceIds.length === 0 && <p style={{ color: "#666" }}>Waiting for feeds...</p>}
       </div>

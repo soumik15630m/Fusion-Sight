@@ -1,10 +1,11 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { use, useState } from "react";
+import { use, useEffect, useState } from "react";
 import DetectionOverlay from "@/components/DetectionOverlay";
 import { useDeviceFeed } from "@/lib/useDeviceFeed";
 import { useFusionFeeds } from "@/lib/useFusionFeeds";
+import { useStableDetections } from "@/lib/useStableDetections";
 
 // react-leaflet touches window/document at import time -- must be client-only,
 // and dynamic() with ssr:false is how that's done in the App Router.
@@ -16,7 +17,24 @@ const DISPLAY_HEIGHT = 360;
 export default function DevicePage({ params }: { params: Promise<{ sourceId: string }> }) {
   const { sourceId } = use(params);
   const [view, setView] = useState<"ground" | "drone">("ground");
-  const { videoRef, status, error, detection, pose, start, stop } = useDeviceFeed(sourceId, view);
+
+  // The wearer's display name, shown on the operator page instead of the raw
+  // source_id. Defaults to the source_id, persisted per device so a reload keeps
+  // it, and sent with every pose update.
+  const [name, setName] = useState(sourceId);
+  useEffect(() => {
+    const saved = window.localStorage.getItem(`feed-name:${sourceId}`);
+    if (saved) setName(saved);
+  }, [sourceId]);
+  useEffect(() => {
+    window.localStorage.setItem(`feed-name:${sourceId}`, name);
+  }, [sourceId, name]);
+
+  const { videoRef, status, error, detection, pose, start, stop } = useDeviceFeed(
+    sourceId,
+    view,
+    name
+  );
   const feeds = useFusionFeeds();
 
   // This screen stands in for the wearer's AR glasses: it shows ONLY the
@@ -26,14 +44,35 @@ export default function DevicePage({ params }: { params: Promise<{ sourceId: str
   // drawing them here would be wasted. The operator page is where every
   // feed's own boxes are reviewed.
   const allDetections = detection?.detections ?? [];
-  const ghosts = allDetections.filter((d) => d.is_ghost);
-  const ownCount = allDetections.length - ghosts.length;
+  const rawGhosts = allDetections.filter((d) => d.is_ghost);
+  const ghosts = useStableDetections(rawGhosts);
+  const ownCount = allDetections.length - rawGhosts.length;
 
   return (
     <main style={{ padding: 16, maxWidth: 520, margin: "0 auto" }}>
       <h1 style={{ fontSize: 18 }}>
-        {sourceId} <span style={{ color: "#888", fontWeight: 400 }}>({status})</span>
+        {name || sourceId}{" "}
+        <span style={{ color: "#888", fontWeight: 400, fontSize: 13 }}>
+          {name && name !== sourceId ? `${sourceId} · ` : ""}
+          {status}
+        </span>
       </h1>
+
+      <label style={{ display: "block", color: "#888", fontSize: 13, marginBottom: 8 }}>
+        Display name{" "}
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder={sourceId}
+          style={{
+            background: "#111",
+            color: "#eee",
+            border: "1px solid #333",
+            padding: "6px 8px",
+            marginLeft: 4,
+          }}
+        />
+      </label>
 
       <div
         style={{

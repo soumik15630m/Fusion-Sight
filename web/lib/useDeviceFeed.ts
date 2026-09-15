@@ -1,12 +1,18 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { wsBase } from "@/lib/config";
 import type { DetectionResponse } from "@/lib/types";
 
 const FRAME_INTERVAL_MS = 200; // ~5 fps upload -- see detector/README.md's latency budget notes
 const FRAME_MAX_WIDTH = 640; // downscale before encode: uplink size is the dominant latency lever (README "Live feed latency")
 const POSE_INTERVAL_MS = 500;
+
+// Raw phone GPS jumps a few metres frame-to-frame even when the phone is still,
+// which makes the map dot jitter and flips cross-feed proximity on/off (ghosts
+// flicker). A low-pass filter on lat/lon settles a stationary feed to a steady
+// point; the lag it adds while walking is minor at this smoothing strength.
+const GPS_SMOOTHING = 0.25; // EMA weight for each new fix (0..1; lower = smoother/laggier)
 
 export type CaptureStatus = "idle" | "starting" | "live" | "error";
 
@@ -36,11 +42,22 @@ function readTiltDeg(e: DeviceOrientationEvent): number | null {
   return 90 - e.beta;
 }
 
-export function useDeviceFeed(sourceId: string, view: "ground" | "drone" = "ground") {
+export function useDeviceFeed(
+  sourceId: string,
+  view: "ground" | "drone" = "ground",
+  name = ""
+) {
   const [status, setStatus] = useState<CaptureStatus>("idle");
   const [error, setError] = useState<string | null>(null);
   const [detection, setDetection] = useState<DetectionResponse | null>(null);
   const [pose, setPose] = useState<PoseState | null>(null);
+
+  // Latest name in a ref so the running pose pump sends edits without needing to
+  // restart the capture (start() isn't rebuilt when the label changes).
+  const nameRef = useRef(name);
+  useEffect(() => {
+    nameRef.current = name;
+  }, [name]);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const trackWsRef = useRef<WebSocket | null>(null);
@@ -51,6 +68,7 @@ export function useDeviceFeed(sourceId: string, view: "ground" | "drone" = "grou
   const poseRef = useRef<PoseState | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const gpsSmoothRef = useRef<{ lat: number; lon: number } | null>(null);
 
   const start = useCallback(async () => {
     setStatus("starting");
@@ -98,9 +116,18 @@ export function useDeviceFeed(sourceId: string, view: "ground" | "drone" = "grou
         geoWatchRef.current = navigator.geolocation.watchPosition(
           (pos) => {
             const prev = poseRef.current;
+            // Low-pass the raw fix before it becomes this feed's position.
+            const sm = gpsSmoothRef.current;
+            const lat = sm
+              ? sm.lat + GPS_SMOOTHING * (pos.coords.latitude - sm.lat)
+              : pos.coords.latitude;
+            const lon = sm
+              ? sm.lon + GPS_SMOOTHING * (pos.coords.longitude - sm.lon)
+              : pos.coords.longitude;
+            gpsSmoothRef.current = { lat, lon };
             const next: PoseState = {
-              lat: pos.coords.latitude,
-              lon: pos.coords.longitude,
+              lat,
+              lon,
               accuracy_m: pos.coords.accuracy,
               heading_deg: prev?.heading_deg ?? 0,
               tilt_deg: prev?.tilt_deg ?? 0,
@@ -163,6 +190,7 @@ export function useDeviceFeed(sourceId: string, view: "ground" | "drone" = "grou
             heading_deg: p.heading_deg,
             tilt_deg: p.tilt_deg,
             accuracy_m: p.accuracy_m,
+            name: nameRef.current || undefined,
           })
         );
       }, POSE_INTERVAL_MS);
@@ -186,6 +214,7 @@ export function useDeviceFeed(sourceId: string, view: "ground" | "drone" = "grou
     trackWsRef.current?.close();
     poseWsRef.current?.close();
     streamRef.current?.getTracks().forEach((t) => t.stop());
+    gpsSmoothRef.current = null;
     setStatus("idle");
   }, []);
 

@@ -17,6 +17,13 @@ services:
     environment:
       BATTLESIGHT_DEVICE: "0"        # first GPU; set "cpu" to run without one
       FUSION_ENABLED: "1"
+      # Fusion tuning for a phone-GPS demo. Consumer GPS (esp. indoors) can't
+      # place two people in the same room precisely, so widen the match radius
+      # and lengthen the "concurrent" window -- feeds near each other still
+      # correlate, and matches don't drop out on every GPS/detection wobble.
+      FUSION_BASE_RADIUS_M: "20"     # default 8; same-room tolerance
+      FUSION_WINDOW_MS: "1500"       # default 400; ride out frame-to-frame gaps
+      FUSION_POSE_MAX_AGE_MS: "5000" # default 2000; keep a feed matchable through GPS dropouts
     expose:
       - "8000"                       # internal only; reached via the proxy
     restart: unless-stopped
