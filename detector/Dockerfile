@@ -17,11 +17,22 @@ ENV DEBIAN_FRONTEND=noninteractive \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
-# python + the two system libs OpenCV needs at runtime (libGL, glib).
+# Python 3.12 (via deadsnakes) -- the pinned requirements were frozen on 3.12
+# (numpy 2.5.x / contourpy 1.3.3 refuse to install on anything older). A venv
+# gives a clean pip that owns its own site-packages (no PEP-668 friction). Plus
+# the two system libs OpenCV needs at runtime (libGL, glib).
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        python3 python3-pip python3-dev \
+        software-properties-common \
+    && add-apt-repository -y ppa:deadsnakes/ppa \
+    && apt-get update && apt-get install -y --no-install-recommends \
+        python3.12 python3.12-dev python3.12-venv \
         libgl1 libglib2.0-0 \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && python3.12 -m venv /opt/venv \
+    && /opt/venv/bin/pip install --upgrade pip
+
+# venv on PATH: `python` / `pip` / `uvicorn` all resolve to the 3.12 venv.
+ENV PATH="/opt/venv/bin:$PATH"
 
 WORKDIR /srv
 
@@ -29,8 +40,7 @@ WORKDIR /srv
 # multi-GB torch install. The --extra-index-url for the cu126 wheels lives inside
 # requirements.txt itself.
 COPY detector/requirements.txt detector/requirements.txt
-RUN python3 -m pip install --upgrade pip \
-    && python3 -m pip install -r detector/requirements.txt
+RUN pip install -r detector/requirements.txt
 
 # fusion/ and detector/ under one root -> /srv/fusion, /srv/detector.
 COPY fusion ./fusion
@@ -45,4 +55,4 @@ ENV BATTLESIGHT_DEVICE=0 \
     FUSION_ENABLED=1
 
 EXPOSE 8000
-CMD ["python3", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
