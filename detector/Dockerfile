@@ -42,17 +42,18 @@ WORKDIR /srv
 COPY detector/requirements.txt detector/requirements.txt
 RUN pip install -r detector/requirements.txt
 
-# fusion/ and detector/ under one root -> /srv/fusion, /srv/detector.
-COPY fusion ./fusion
+# Detector only -- fusion is a separate service/image now, reached over the
+# network via app/fusion_client.py (FUSION_WS_URL).
 COPY detector ./detector
 
-# Run from detector/ with `app.main:app`, exactly as detector/README.md documents;
-# app/__init__.py then makes /srv (repo root) importable for `fusion`.
+# Run from detector/ with `app.main:app`, as detector/README.md documents.
 WORKDIR /srv/detector
 
 # "0" = first GPU (app/config.py default). Override to "cpu" to run without a GPU.
+# FUSION_WS_URL points at the fusion service (compose service name, or a mesh
+# hostname/IP in the distributed deployment).
 ENV BATTLESIGHT_DEVICE=0 \
-    FUSION_ENABLED=1
+    FUSION_WS_URL=ws://fusion:8100/ws/ingest
 
 EXPOSE 8000
 CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

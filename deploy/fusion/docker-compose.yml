@@ -1,0 +1,21 @@
+# LAPTOP 2 -- FUSION (no GPU).   cd deploy/fusion && docker compose up --build
+#
+# The stateful hub: receives poses from phones and raw detections from the
+# detector, computes cross-feed ghosts + the world map, and serves them to
+# phones and the operator. Tiny image, no torch/CUDA.
+services:
+  fusion:
+    build:
+      context: ../..
+      dockerfile: fusion/Dockerfile
+    environment:
+      FUSION_ENABLED: "1"
+      # Phone-GPS demo tuning (consumer GPS can't separate a room; widen radius
+      # and lengthen the concurrency window).
+      FUSION_BASE_RADIUS_M: "${FUSION_BASE_RADIUS_M:-20}"
+      FUSION_WINDOW_MS: "${FUSION_WINDOW_MS:-1500}"
+      FUSION_POSE_MAX_AGE_MS: "${FUSION_POSE_MAX_AGE_MS:-5000}"
+    ports:
+      # Published so phones (via the broadcast proxy) and the detector can reach it.
+      - "${BIND_ADDR:-0.0.0.0}:8100:8100"
+    restart: unless-stopped

@@ -12,6 +12,7 @@ detector/.venv
 detector/runs
 detector/yolov3
 detector/tests
+fusion/tests
 
 # Web tree isn't part of the detector image.
 web/node_modules

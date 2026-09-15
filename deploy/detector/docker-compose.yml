@@ -1,0 +1,25 @@
+# LAPTOP 1 -- DETECTOR (GPU).   cd deploy/detector && docker compose up --build
+#
+# Runs only the inference service. It streams raw detections to the fusion
+# laptop (FUSION_WS_URL) and serves the operator video relay. Set the fusion
+# laptop's address in .env (copy .env.example) -- defaults to the Tailscale
+# MagicDNS name "fusion".
+services:
+  detector:
+    build:
+      context: ../..
+      dockerfile: detector/Dockerfile
+    environment:
+      BATTLESIGHT_DEVICE: "0"                       # first GPU; "cpu" to disable
+      FUSION_WS_URL: "${FUSION_WS_URL:-ws://fusion:8100/ws/ingest}"
+    ports:
+      # Published so the broadcast laptop's proxy can reach it over the mesh.
+      - "${BIND_ADDR:-0.0.0.0}:8000:8000"
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

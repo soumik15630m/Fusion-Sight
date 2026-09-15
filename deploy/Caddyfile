@@ -1,20 +1,30 @@
-# Single-origin reverse proxy in front of the stack. Cloudflare's tunnel points
-# here; this splits traffic so phones only ever see ONE HTTPS origin:
-#   - backend API + WebSocket paths  -> detector:8000
-#   - everything else (pages, assets) -> web:3000
-# Caddy upgrades WebSockets transparently, so /ws/track, /ws/pose, /ws/view and
-# /ws/detections all work through it.
+# Single public origin in front of the split stack. Routes each path to the
+# right service so phones/operators only ever see one HTTPS URL. Caddy upgrades
+# WebSockets transparently.
+#
+# Upstreams are env-driven so this one file serves both deployments:
+#   - all-in-one (one laptop): defaults resolve to compose service names.
+#   - distributed (3 laptops): the broadcast laptop sets DETECTOR_UPSTREAM /
+#     FUSION_UPSTREAM / WEB_UPSTREAM to the other laptops' mesh addresses.
+{
+	auto_https off
+}
+
 :80 {
-	# Match every backend path prefix (detector/app/routers/*). Keep this in sync
-	# if new backend routes are added.
-	@api {
-		path /ws/* /webrtc/* /fusion/* /detect /detect/* /exclude /exclude/* /train /train/* /health /docs /docs/* /openapi.json /redoc
-	}
-	handle @api {
-		reverse_proxy detector:8000
+	# Detector service: inference, the operator VIDEO relay, and the misc APIs.
+	@detector path /ws/track* /ws/view* /webrtc/* /detect /detect/* /exclude /exclude/* /train /train/* /health /docs /docs/* /openapi.json
+	handle @detector {
+		reverse_proxy {$DETECTOR_UPSTREAM:detector:8000}
 	}
 
+	# Fusion service: pose in, phone ghosts, operator detection overlays, map.
+	@fusion path /ws/pose* /ws/ghosts* /ws/detections* /fusion/*
+	handle @fusion {
+		reverse_proxy {$FUSION_UPSTREAM:fusion:8100}
+	}
+
+	# Everything else is the Next.js web client.
 	handle {
-		reverse_proxy web:3000
+		reverse_proxy {$WEB_UPSTREAM:web:3000}
 	}
 }

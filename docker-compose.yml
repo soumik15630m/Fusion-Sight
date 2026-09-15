@@ -1,34 +1,26 @@
-# FusionSight full stack: `docker compose up --build`
+# FusionSight ALL-IN-ONE (single laptop): `docker compose up --build`
 #
-#   detector  - FastAPI + YOLO + fusion, runs on the GPU
-#   web       - Next.js operator/device client
-#   proxy     - Caddy, single origin in front of detector + web
-#   cloudflared - Cloudflare tunnel exposing the proxy over HTTPS (for phone
-#                 camera/GPS, which browsers only allow on a secure origin)
+# Runs every service on one machine over the compose network. For the 3-laptop
+# split (detector / fusion / broadcast on separate machines) use the per-role
+# stacks under deploy/<role>/ instead -- see DEPLOY.md.
 #
-# The public HTTPS URL is printed in the cloudflared logs on startup:
-#   docker compose logs -f cloudflared   ->   https://<random>.trycloudflare.com
+#   detector    - FastAPI + YOLO, GPU inference (+ operator video relay)
+#   fusion      - cross-feed correlation, pose/ghost/map state (no GPU)
+#   web         - Next.js operator/device client
+#   proxy       - Caddy, single origin routing to detector/fusion/web
+#   cloudflared - Cloudflare tunnel exposing the proxy over HTTPS
 
 services:
   detector:
     build:
-      context: .                     # repo root: image needs both detector/ and fusion/
+      context: .
       dockerfile: detector/Dockerfile
     environment:
-      BATTLESIGHT_DEVICE: "0"        # first GPU; set "cpu" to run without one
-      FUSION_ENABLED: "1"
-      # Fusion tuning for a phone-GPS demo. Consumer GPS (esp. indoors) can't
-      # place two people in the same room precisely, so widen the match radius
-      # and lengthen the "concurrent" window -- feeds near each other still
-      # correlate, and matches don't drop out on every GPS/detection wobble.
-      FUSION_BASE_RADIUS_M: "20"     # default 8; same-room tolerance
-      FUSION_WINDOW_MS: "1500"       # default 400; ride out frame-to-frame gaps
-      FUSION_POSE_MAX_AGE_MS: "5000" # default 2000; keep a feed matchable through GPS dropouts
+      BATTLESIGHT_DEVICE: "0"                 # first GPU; "cpu" to run without one
+      FUSION_WS_URL: "ws://fusion:8100/ws/ingest"
     expose:
-      - "8000"                       # internal only; reached via the proxy
+      - "8000"
     restart: unless-stopped
-    # GPU passthrough. Requires the NVIDIA Container Toolkit on the host
-    # (nvidia-ctk) and, on Windows, Docker Desktop with WSL2 + NVIDIA driver.
     deploy:
       resources:
         reservations:
@@ -37,11 +29,26 @@ services:
               count: all
               capabilities: [gpu]
 
+  fusion:
+    build:
+      context: .
+      dockerfile: fusion/Dockerfile
+    environment:
+      FUSION_ENABLED: "1"
+      # Phone-GPS demo tuning: consumer GPS can't separate people in one room,
+      # so widen the match radius and lengthen the "concurrent" window.
+      FUSION_BASE_RADIUS_M: "20"
+      FUSION_WINDOW_MS: "1500"
+      FUSION_POSE_MAX_AGE_MS: "5000"
+    expose:
+      - "8100"
+    restart: unless-stopped
+
   web:
     build:
       context: ./web
       args:
-        NEXT_PUBLIC_BACKEND_SAME_ORIGIN: "1"   # talk to the backend on the proxy origin
+        NEXT_PUBLIC_BACKEND_SAME_ORIGIN: "1"
     expose:
       - "3000"
     restart: unless-stopped
@@ -50,18 +57,17 @@ services:
     image: caddy:2-alpine
     depends_on:
       - detector
+      - fusion
       - web
     volumes:
       - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
     ports:
-      - "8080:80"                    # optional LAN access: http://<laptop-ip>:8080 (operator page)
+      - "8080:80"
     restart: unless-stopped
 
   cloudflared:
     image: cloudflare/cloudflared:latest
     depends_on:
       - proxy
-    # Quick tunnel: no Cloudflare account needed, random *.trycloudflare.com URL.
-    # For a stable named-tunnel hostname instead, see DEPLOY.md.
     command: tunnel --no-autoupdate --url http://proxy:80
     restart: unless-stopped

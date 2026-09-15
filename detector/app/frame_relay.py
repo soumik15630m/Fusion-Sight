@@ -1,10 +1,11 @@
 """Fan out already-decoded frame bytes to operator-page viewers.
 
-Reuses frames detector's WS/WebRTC handlers already have in memory after
-inference -- no second capture/encode on the phone, no SFU/video-relay
-server. A viewer (WS /ws/view/{source_id}, detector/app/routers/pose.py)
-just drains its own queue; a feed with no viewers pays only the cost of a
-`bool(queue)` check per frame.
+Lives with the detector because the frames are here: /ws/track and
+/webrtc/offer already have the JPEG in hand after inference, and /ws/view
+(app/routers/view.py) re-publishes those same bytes -- no second capture/encode
+on the phone, and frames never cross to the fusion service (only the light
+detection JSON does). A feed with no viewers pays only a `bool(queue)` check
+per frame.
 """
 import asyncio
 import threading

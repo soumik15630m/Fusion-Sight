@@ -6,10 +6,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from app import config
 from app.detector import detector
 from app.exclusion import exclusion_store
-from app.routers import detect, exclude, pose, track, train
+from app.fusion_client import FUSION_WS_URL, fusion_client
+from app.routers import detect, exclude, track, train, view
 from app.trainer import trainer
-from fusion import config as fusion_config
-from fusion.pose_store import pose_store
 
 # aiortc is an optional dependency of the WebRTC transport (pip install
 # aiortc). Guard the import so a server that hasn't installed it yet still
@@ -29,8 +28,10 @@ except ImportError as e:
 async def lifespan(app: FastAPI):
     # --- startup ---
     detector.load()
+    fusion_client.start()  # persistent link to the fusion service
     yield
     # --- shutdown ---
+    await fusion_client.stop()
     if WEBRTC_AVAILABLE:
         await webrtc_router.close_all()
     detector.unload()
@@ -54,7 +55,7 @@ app.include_router(detect.router)
 app.include_router(track.router)
 app.include_router(train.router)
 app.include_router(exclude.router)
-app.include_router(pose.router)
+app.include_router(view.router)
 if WEBRTC_AVAILABLE:
     app.include_router(webrtc_router.router)
 
@@ -78,6 +79,6 @@ async def health():
         "tracked_per_feed": detector.stats(),
         "exclusions": exclusion_store.list(),
         "webrtc_available": WEBRTC_AVAILABLE,
-        "fusion_enabled": fusion_config.FUSION_ENABLED,
-        "fusion_feeds_with_pose": list(pose_store.all_active().keys()),
+        # Fusion now runs as a separate service; this is just the link target.
+        "fusion_ws_url": FUSION_WS_URL,
     }

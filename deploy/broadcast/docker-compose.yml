@@ -1,0 +1,36 @@
+# LAPTOP 3 -- BROADCAST / EDGE.   cd deploy/broadcast && docker compose up --build
+#
+# The only public surface: serves the web client and reverse-proxies one HTTPS
+# origin to the detector + fusion laptops over the mesh. Set their addresses in
+# .env (copy .env.example). Public URL is printed in the cloudflared logs.
+services:
+  web:
+    build:
+      context: ../../web
+      args:
+        NEXT_PUBLIC_BACKEND_SAME_ORIGIN: "1"
+    expose:
+      - "3000"
+    restart: unless-stopped
+
+  proxy:
+    image: caddy:2-alpine
+    depends_on:
+      - web
+    environment:
+      # Where the other two laptops live (Tailscale MagicDNS names or tailnet IPs).
+      DETECTOR_UPSTREAM: "${DETECTOR_HOST:-detector}:8000"
+      FUSION_UPSTREAM: "${FUSION_HOST:-fusion}:8100"
+      WEB_UPSTREAM: "web:3000"
+    volumes:
+      - ../Caddyfile:/etc/caddy/Caddyfile:ro
+    ports:
+      - "8080:80"                      # optional LAN access to the operator page
+    restart: unless-stopped
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    depends_on:
+      - proxy
+    command: tunnel --no-autoupdate --url http://proxy:80
+    restart: unless-stopped

@@ -29,11 +29,8 @@ from pydantic import BaseModel
 from starlette.concurrency import run_in_threadpool
 
 from app.detector import detector
-from fusion import config as fusion_config
-from fusion import engine as fusion_engine
-from fusion.detection_relay import detection_relay
-from fusion.frame_relay import frame_relay
-from fusion.pose_store import pose_store
+from app.frame_relay import frame_relay
+from app.fusion_client import fusion_client
 
 router = APIRouter(prefix="/webrtc", tags=["streaming"])
 
@@ -83,7 +80,7 @@ async def offer(source_id: str, body: SessionDescription):
     async def on_connectionstatechange():
         if pc.connectionState in ("failed", "closed", "disconnected"):
             detector.reset_source(source_id)
-            fusion_engine.reset_source(source_id)
+            fusion_client.send({"source_id": source_id, "event": "end"})
             _peer_connections.discard(pc)
             await pc.close()
 
@@ -103,20 +100,22 @@ async def offer(source_id: str, body: SessionDescription):
                     # as the WebSocket path -- only the transport differs.
                     result = await run_in_threadpool(detector.track, img, source_id)
 
-                    if fusion_config.FUSION_ENABLED:
-                        pose = pose_store.latest(source_id)
-                        if pose is not None:
-                            result["detections"] = fusion_engine.process(
-                                source_id, pose, result["detections"]
-                            )
-
+                    # Own detections to the phone's data channel; frame to the
+                    # operator relay; raw detections to the fusion service. Same
+                    # split as the WebSocket path (app/routers/track.py).
                     _send(state["channel"], result)
                     ok, jpeg = cv2.imencode(".jpg", img)
                     if ok:
                         frame_relay.publish(source_id, jpeg.tobytes())
-                    # Merged detections to operator viewers, matching the
-                    # WebSocket path (app/routers/track.py).
-                    detection_relay.publish(source_id, result)
+                    fusion_client.send(
+                        {
+                            "source_id": source_id,
+                            "detections": result.get("detections", []),
+                            "frame_width": result.get("frame_width", 0),
+                            "frame_height": result.get("frame_height", 0),
+                            "inference_ms": result.get("inference_ms", 0.0),
+                        }
+                    )
             except Exception as e:  # noqa: BLE001
                 # Raised by aiortc as the normal way this loop ends when the
                 # client stops sending (track ended) -- not worth more than a

@@ -1,0 +1,5 @@
+# Fusion service deps only -- no torch/CUDA (this service never touches the GPU).
+# The fusion/ package itself is pure stdlib; these are just the web server.
+fastapi==0.141.1
+uvicorn[standard]==0.52.4
+pydantic==2.13.5

@@ -5,6 +5,7 @@ import { use, useEffect, useState } from "react";
 import DetectionOverlay from "@/components/DetectionOverlay";
 import { useDeviceFeed } from "@/lib/useDeviceFeed";
 import { useFusionFeeds } from "@/lib/useFusionFeeds";
+import { useGhostStream } from "@/lib/useGhostStream";
 import { useStableDetections } from "@/lib/useStableDetections";
 
 // react-leaflet touches window/document at import time -- must be client-only,
@@ -37,16 +38,14 @@ export default function DevicePage({ params }: { params: Promise<{ sourceId: str
   );
   const feeds = useFusionFeeds();
 
-  // This screen stands in for the wearer's AR glasses: it shows ONLY the
-  // ghost markers backfilled from other feeds (the augmentation), not this
-  // feed's own detection boxes. The device is a capture source -- camera +
-  // GPS -- and its own detections exist only to feed other feeds' fusion, so
-  // drawing them here would be wasted. The operator page is where every
-  // feed's own boxes are reviewed.
-  const allDetections = detection?.detections ?? [];
-  const rawGhosts = allDetections.filter((d) => d.is_ghost);
+  // This screen stands in for the wearer's AR glasses: it shows ONLY the ghost
+  // markers backfilled from other feeds (the augmentation). Those now arrive on
+  // their own channel from the fusion service (useGhostStream); the /ws/track
+  // response carries only this feed's own detections (status/debug), which exist
+  // just to feed other feeds' fusion. The operator page reviews own boxes.
+  const ownCount = detection?.detections?.length ?? 0;
+  const rawGhosts = useGhostStream(sourceId);
   const ghosts = useStableDetections(rawGhosts);
-  const ownCount = allDetections.length - rawGhosts.length;
 
   return (
     <main style={{ padding: 16, maxWidth: 520, margin: "0 auto" }}>
