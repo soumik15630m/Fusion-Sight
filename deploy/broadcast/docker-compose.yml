@@ -32,5 +32,8 @@ services:
     image: cloudflare/cloudflared:latest
     depends_on:
       - proxy
-    command: tunnel --no-autoupdate --url http://proxy:80
+    # --protocol http2 forces the tunnel over TCP instead of QUIC/UDP; QUIC
+    # times out ("context deadline exceeded") on networks that throttle UDP,
+    # which tears the quick tunnel down and churns the URL.
+    command: tunnel --no-autoupdate --protocol http2 --url http://proxy:80
     restart: unless-stopped

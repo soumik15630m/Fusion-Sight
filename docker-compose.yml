@@ -69,5 +69,7 @@ services:
     image: cloudflare/cloudflared:latest
     depends_on:
       - proxy
-    command: tunnel --no-autoupdate --url http://proxy:80
+    # http2 (TCP) instead of QUIC/UDP -- QUIC times out on UDP-throttling
+    # networks and churns the quick-tunnel URL.
+    command: tunnel --no-autoupdate --protocol http2 --url http://proxy:80
     restart: unless-stopped
