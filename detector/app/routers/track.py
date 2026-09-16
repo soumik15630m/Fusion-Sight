@@ -51,14 +51,28 @@ async def ws_track(websocket: WebSocket, source_id: str, view: str = "ground"):
 
             # Blocking inference off the event loop so one feed can't stall the others.
             result = await run_in_threadpool(detector.track, frame, source_id, view)
+            own = result.get("detections", [])
 
-            await websocket.send_text(json.dumps(result))
+            # The phone's screen shows only ghosts (from fusion), so returning the
+            # full detection list here is wasted downlink -- send a compact status
+            # ack instead, and reserve the full detections for fusion + operator.
+            await websocket.send_text(
+                json.dumps(
+                    {
+                        "source_id": source_id,
+                        "inference_ms": result.get("inference_ms", 0.0),
+                        "own_count": len(own),
+                        "frame_width": result.get("frame_width", 0),
+                        "frame_height": result.get("frame_height", 0),
+                    }
+                )
+            )
             frame_relay.publish(source_id, raw)
-            # Hand the raw detections to the fusion service (non-blocking).
+            # Hand the full raw detections to the fusion service (non-blocking).
             fusion_client.send(
                 {
                     "source_id": source_id,
-                    "detections": result.get("detections", []),
+                    "detections": own,
                     "frame_width": result.get("frame_width", 0),
                     "frame_height": result.get("frame_height", 0),
                     "inference_ms": result.get("inference_ms", 0.0),

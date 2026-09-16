@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { wsBase } from "@/lib/config";
-import type { DetectionResponse } from "@/lib/types";
+import type { TrackAck } from "@/lib/types";
 
 const FRAME_INTERVAL_MS = 200; // ~5 fps upload -- see detector/README.md's latency budget notes
 const FRAME_MAX_WIDTH = 640; // downscale before encode: uplink size is the dominant latency lever (README "Live feed latency")
@@ -49,7 +49,7 @@ export function useDeviceFeed(
 ) {
   const [status, setStatus] = useState<CaptureStatus>("idle");
   const [error, setError] = useState<string | null>(null);
-  const [detection, setDetection] = useState<DetectionResponse | null>(null);
+  const [detection, setDetection] = useState<TrackAck | null>(null);
   const [pose, setPose] = useState<PoseState | null>(null);
 
   // Latest name in a ref so the running pose pump sends edits without needing to

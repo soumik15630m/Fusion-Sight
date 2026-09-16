@@ -28,6 +28,18 @@ except ImportError as e:
 async def lifespan(app: FastAPI):
     # --- startup ---
     detector.load()
+    # Preflight the fusion link so a wrong FUSION_WS_URL fails loudly (ghosts
+    # silently vanish otherwise). Non-fatal -- fusion may just not be up yet.
+    ok, msg = await fusion_client.preflight()
+    if ok:
+        print(f"[startup] fusion link preflight ok: {msg}")
+    else:
+        banner = "!" * 72
+        print(f"\n{banner}\n[startup] FUSION LINK PREFLIGHT FAILED: {msg}\n"
+              f"[startup] FUSION_WS_URL={FUSION_WS_URL}\n"
+              f"[startup] On Docker Desktop, containers often can't resolve Tailscale\n"
+              f"[startup] MagicDNS names -- set FUSION_WS_URL to the fusion laptop's\n"
+              f"[startup] tailnet IP in deploy/detector/.env. Retrying in the background.\n{banner}\n")
     fusion_client.start()  # persistent link to the fusion service
     yield
     # --- shutdown ---
@@ -79,6 +91,7 @@ async def health():
         "tracked_per_feed": detector.stats(),
         "exclusions": exclusion_store.list(),
         "webrtc_available": WEBRTC_AVAILABLE,
-        # Fusion now runs as a separate service; this is just the link target.
-        "fusion_ws_url": FUSION_WS_URL,
+        # Fusion runs as a separate service; surface whether the link is live so
+        # `curl <edge>/health` reveals a broken detector->fusion hop at a glance.
+        "fusion_link": {"url": FUSION_WS_URL, "connected": fusion_client.connected},
     }

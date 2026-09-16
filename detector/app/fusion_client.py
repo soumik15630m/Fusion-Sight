@@ -12,6 +12,7 @@ distributed deployment, or a compose service name on one machine).
 import asyncio
 import json
 import os
+from urllib.parse import urlparse
 
 import websockets
 
@@ -19,10 +20,28 @@ FUSION_WS_URL = os.getenv("FUSION_WS_URL", "ws://fusion:8100/ws/ingest")
 _RECONNECT_S = 2.0
 
 
+def _host_port() -> tuple[str, int]:
+    u = urlparse(FUSION_WS_URL)
+    return u.hostname or "fusion", u.port or 8100
+
+
 class FusionClient:
     def __init__(self):
         self._queue: asyncio.Queue = asyncio.Queue(maxsize=200)
         self._task: asyncio.Task | None = None
+        self.connected = False  # exposed via /health so a broken link is visible
+
+    async def preflight(self) -> tuple[bool, str]:
+        """Resolve the fusion host once at startup so a misconfigured address
+        (e.g. a Tailscale MagicDNS name a container can't resolve) fails loudly
+        instead of silently dropping every ghost."""
+        host, port = _host_port()
+        loop = asyncio.get_running_loop()
+        try:
+            await loop.getaddrinfo(host, port)
+            return True, f"resolved fusion host '{host}:{port}'"
+        except Exception as e:  # noqa: BLE001
+            return False, f"cannot resolve fusion host '{host}': {e!r}"
 
     def send(self, payload: dict) -> None:
         if self._queue.full():
@@ -39,6 +58,7 @@ class FusionClient:
         while True:
             try:
                 async with websockets.connect(FUSION_WS_URL, max_queue=None) as ws:
+                    self.connected = True
                     print(f"[fusion-client] connected to {FUSION_WS_URL}")
                     while True:
                         payload = await self._queue.get()
@@ -46,7 +66,9 @@ class FusionClient:
             except asyncio.CancelledError:
                 raise
             except Exception as e:  # noqa: BLE001
-                print(f"[fusion-client] link down ({e!r}); retrying in {_RECONNECT_S}s")
+                self.connected = False
+                print(f"[fusion-client] link DOWN to {FUSION_WS_URL} ({e!r}); "
+                      f"ghosts will not flow until it reconnects. Retrying in {_RECONNECT_S}s")
                 await asyncio.sleep(_RECONNECT_S)
 
     def start(self) -> None:

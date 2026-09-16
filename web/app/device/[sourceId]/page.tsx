@@ -43,7 +43,7 @@ export default function DevicePage({ params }: { params: Promise<{ sourceId: str
   // their own channel from the fusion service (useGhostStream); the /ws/track
   // response carries only this feed's own detections (status/debug), which exist
   // just to feed other feeds' fusion. The operator page reviews own boxes.
-  const ownCount = detection?.detections?.length ?? 0;
+  const ownCount = detection?.own_count ?? 0;
   const rawGhosts = useGhostStream(sourceId);
   const ghosts = useStableDetections(rawGhosts);
 

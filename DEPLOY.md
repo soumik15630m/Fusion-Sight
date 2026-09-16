@@ -128,6 +128,37 @@ hostname at `http://proxy:80`, and swap the broadcast `cloudflared` command:
 
 with `TUNNEL_TOKEN=...` in `deploy/broadcast/.env`.
 
+## Verifying the chain / troubleshooting silent ghost loss
+
+The detector→fusion hop is the one place a wrong address makes everything *look*
+fine while ghosts silently never appear. Two guards:
+
+- **Startup preflight**: the detector resolves `FUSION_WS_URL` on boot and prints
+  a loud `FUSION LINK PREFLIGHT FAILED` banner (with the fix) if it can't.
+- **Live status via one curl** — hits the edge → detector, which reports the link:
+  ```bash
+  curl -s https://<edge>/health | grep -o '"fusion_link":{[^}]*}'
+  #   "fusion_link":{"url":"ws://fusion:8100/ws/ingest","connected":true}
+  ```
+  `connected:false` ⇒ the detector can't reach fusion. On Docker Desktop
+  (Windows) containers often can't resolve Tailscale **MagicDNS** names — set
+  `FUSION_WS_URL` (and `DETECTOR_HOST`/`FUSION_HOST` on the edge) to the tailnet
+  **IPs** in the `.env` files, which always work.
+
+## Latency notes
+
+- **Biggest lever — the tunnel round-trip.** Every frame goes phone → Cloudflare
+  edge → broadcast laptop. For a same-room demo that adds a wide-area hop. To cut
+  it, serve the broadcast laptop over **LAN HTTPS** directly (a trusted local cert
+  via Caddy's internal CA or mkcert, installed on the phones) and point the phones
+  at the laptop's LAN IP — camera/GPS still get their required secure origin, with
+  no WAN detour. Trade-off: you must trust the local cert on each phone.
+- **On-LAN service hops are cheap** (~1–5 ms), and the phone screen shows only
+  ghosts (from fusion on its own channel), so the detector→fusion hop is off the
+  phone's critical path.
+- The detector returns only a compact status ack to the phone (not the full
+  detection list, which the phone doesn't display) to keep the phone downlink small.
+
 ## Config reference
 
 | var | service | meaning |

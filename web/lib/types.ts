@@ -30,6 +30,18 @@ export interface DetectionResponse {
   error?: string;
 }
 
+/** Compact per-frame status the detector sends back to the phone on /ws/track.
+ * The phone displays only ghosts (from the fusion service on /ws/ghosts), so
+ * the full detection list isn't sent down this path -- just this ack. */
+export interface TrackAck {
+  source_id: string;
+  inference_ms: number;
+  own_count: number;
+  frame_width: number;
+  frame_height: number;
+  error?: string;
+}
+
 export interface PoseUpdate {
   lat: number;
   lon: number;
