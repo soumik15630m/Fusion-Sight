@@ -1,0 +1,38 @@
+# LAPTOP A -- BACKEND (GPU).   cd deploy/backend && docker compose up --build
+#
+# Runs detector + fusion together on the GPU machine. The detector->fusion
+# detection stream stays on this box's compose network (localhost, no mesh hop);
+# only the edge laptop reaches in, over the mesh, to the published 8000/8100.
+services:
+  detector:
+    build:
+      context: ../..
+      dockerfile: detector/Dockerfile
+    environment:
+      BATTLESIGHT_DEVICE: "0"                       # first GPU; "cpu" to disable
+      FUSION_WS_URL: "ws://fusion:8100/ws/ingest"   # same compose network -> local
+    ports:
+      - "${BIND_ADDR:-0.0.0.0}:8000:8000"           # reached by the edge proxy over the mesh
+    depends_on:
+      - fusion
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  fusion:
+    build:
+      context: ../..
+      dockerfile: fusion/Dockerfile
+    environment:
+      FUSION_ENABLED: "1"
+      FUSION_BASE_RADIUS_M: "${FUSION_BASE_RADIUS_M:-20}"
+      FUSION_WINDOW_MS: "${FUSION_WINDOW_MS:-1500}"
+      FUSION_POSE_MAX_AGE_MS: "${FUSION_POSE_MAX_AGE_MS:-5000}"
+    ports:
+      - "${BIND_ADDR:-0.0.0.0}:8100:8100"           # reached by the edge proxy over the mesh
+    restart: unless-stopped
