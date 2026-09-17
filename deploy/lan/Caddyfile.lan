@@ -1,0 +1,22 @@
+# LAN HTTPS with Caddy's own internal CA. The site address is the laptop's LAN
+# IP (from $LAN_HOST) on port 8443, so Caddy issues a cert whose SAN is that IP
+# and serves it regardless of SNI -- which is what phones connecting by IP need.
+# Install Caddy's root cert on each phone once (see README.md) and the cert is
+# trusted, so camera + GPS work.
+{$LAN_HOST}:8443 {
+	tls internal
+
+	@detector path /ws/track* /ws/view* /webrtc/* /detect /detect/* /exclude /exclude/* /train /train/* /health /docs /docs/* /openapi.json
+	handle @detector {
+		reverse_proxy detector:8000
+	}
+
+	@fusion path /ws/pose* /ws/ghosts* /ws/detections* /fusion/*
+	handle @fusion {
+		reverse_proxy fusion:8100
+	}
+
+	handle {
+		reverse_proxy web:3000
+	}
+}
