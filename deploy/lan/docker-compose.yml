@@ -1,0 +1,72 @@
+# LAN / HTTPS single-laptop stack -- fully isolated from the tunnel demo.
+#
+#   cd deploy/lan && docker compose up --build -d
+#
+# Everything on ONE machine over its own compose network. Serves HTTPS on the
+# LAN (Caddy's internal CA) so phone camera/GPS work without the internet or the
+# Cloudflare tunnel. Phones must install Caddy's root cert once (see README.md).
+#
+# Isolation from the already-running stacks:
+#   - project name        : fusionlan   (own containers + network)
+#   - image names         : fusionlan-* (won't overwrite backend-*/broadcast-*)
+#   - published host port : 8443 only   (detector/fusion/web stay internal)
+name: fusionlan
+
+services:
+  detector:
+    image: fusionlan-detector
+    build:
+      context: ../..
+      dockerfile: detector/Dockerfile
+    environment:
+      BATTLESIGHT_DEVICE: "0"
+      FUSION_WS_URL: "ws://fusion:8100/ws/ingest"
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  fusion:
+    image: fusionlan-fusion
+    build:
+      context: ../..
+      dockerfile: fusion/Dockerfile
+    environment:
+      FUSION_ENABLED: "1"
+      FUSION_BASE_RADIUS_M: "20"
+      FUSION_WINDOW_MS: "1500"
+      FUSION_POSE_MAX_AGE_MS: "5000"
+    restart: unless-stopped
+
+  web:
+    image: fusionlan-web
+    build:
+      context: ../../web
+      args:
+        NEXT_PUBLIC_BACKEND_SAME_ORIGIN: "1"
+    restart: unless-stopped
+
+  proxy:
+    image: caddy:2-alpine
+    depends_on:
+      - detector
+      - fusion
+      - web
+    environment:
+      # Your laptop's LAN IP (set in .env). Caddy issues an internal-CA cert
+      # for it so https://<LAN_HOST>:8443 is trusted once the root cert is
+      # installed on the phones.
+      LAN_HOST: "${LAN_HOST}"
+    volumes:
+      - ./Caddyfile.lan:/etc/caddy/Caddyfile:ro
+      - fusionlan-caddy-data:/data       # persists the internal CA across restarts
+    ports:
+      - "8443:8443"
+    restart: unless-stopped
+
+volumes:
+  fusionlan-caddy-data:
