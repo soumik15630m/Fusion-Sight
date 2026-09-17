@@ -28,6 +28,12 @@ weights/*
 !weights/best.pt
 !weights/drone_best.pt
 
+# Deployed TensorRT engines. NOTE: these are serialized against a specific GPU
+# architecture + TensorRT/CUDA version and will NOT deserialize on other hosts.
+# Rebuild from the .pt checkpoints if loading fails.
+!detector/weights/best.engine
+!detector/weights/drone_best.engine
+
 # --- Generated runs / logs / benchmark output ---
 runs/
 logs/
